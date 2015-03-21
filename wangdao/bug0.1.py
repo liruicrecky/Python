@@ -5,15 +5,24 @@ import urllib2
 import thread
 import re
 import time
-import string
+import MySQLdb
 
 
+#---------------SQL---------------------
+
+
+
+
+
+
+#-----------------------------------------
 class PostSpider:
 
     def __init__(self):
 
         self.page = 1
         self.pages = []
+        self.endPage = 0
         self.enable = False
 
     def getAllPostPage(self, forum, page):
@@ -31,6 +40,10 @@ class PostSpider:
         post_re = re.compile(r'<div class="postinfo">.+?<a target=.+?>(.+?)</a>.+?<em id=".+?>(.+?)</em>.+?<td class="t_msgfont" id=".+?>(.+?)</td>', re.DOTALL)
         #context_re = re.compile(r'\t|\n|<a.*?>|<img.*?>|<strong.*?>|<br.*?>|<fontsize.*?>|</a>|</font>| |</strong>|&nbsp;')
         #context_space_re = re.compile(r'<i>|</i>')
+        context_endpage_re = re.compile(r'<div class="pages">.+?<a href =".+?">(.+?)</a>.+?<a href=".+?class="next">', re.DOTALL)
+
+        self.endPage = context_endpage_re.findall(gbkPostPage)
+        print self.endPage
 
         postItems = post_re.findall(gbkPostPage)
 
@@ -50,17 +63,8 @@ class PostSpider:
             print '第%d页' % postPage , items[1], items[0]
             print cont
 
-        myInput = raw_input('保存到文件(y/n)? 退出(quit)：')
+        myInput = raw_input('继续(enter)? 退出(quit)：')
         if myInput == "quit":
-            self.enable = False
-        if myInput == "y":
-            file = open(path, 'wb')
-            for items in nowPostPage:
-                cont = context_re.sub("", items[2])
-                cont = context_space_re.sub(" ", cont)
-                file.writelines('作者: %s' % items[0].decode('utf'), items[1]).decode('utf')
-                file.writelines(cont.decode('utf'))
-            file.close()
             self.enable = False
 
         del self.pages[0]
@@ -97,13 +101,13 @@ class PostSpider:
                 page += 1
 
 
-
 class ForumSpider:
 
     def __init__(self):
 
         self.page = 1
         self.pages = []
+        self.title = ''
         self.enable = False
 
     def getForumPage(self, forum, page):
@@ -122,17 +126,32 @@ class ForumSpider:
         title = title_re.findall(gbkForumPage)
         items = page_re.findall(gbkForumPage)
 
-        return items
+        return items, title
 
     def showForum(self, nowForumPage, page):
 
+        db = MySQLdb.connect('localhost', 'root', 'liruicheng122*.', 'wangdao', charset = 'gb2312')
+        cursor = db.cursor()
+
         index = 1
+        print self.title[0].encode('utf-8')
         print u'        日期     发帖人        主题'
         for items in nowForumPage:
-            print '%d: ' % index, '第%d页' % page , items[3], items[2], items[1].encode('utf')
+            print '%d: ' % index, '第%d页' % page , items[3], items[2], items[1].encode('utf8')
             index += 1
+            #--------------------SQL--------------------------------------
+
+            db.select_db('wangdao')
+            forumId = re.split(r'thread-(.+?)-', items[0])
+           # value = [1,2,3,4,5]
+            value = [forumId[1], items[2], items[3], items[0], items[1]]
+            cursor.execute("INSERT INTO forum (FORUM_ID, AUTHOR, DATE, URL, TITLE) VALUES(%s, %s, %s, %s, %s)", value)
 
         flag = 1
+
+        db.commit()
+        cursor.close()
+        db.close()
 
         while flag:
 
@@ -145,7 +164,7 @@ class ForumSpider:
             if myInput.isdigit():
 
                 postPage = PostSpider()
-                postPage.startPostPage(nowForumPage[int(myInput)][0])
+                postPage.startPostPage(nowForumPage[int(myInput) - 1][0])
                 index = 1
                 print u'        日期     发帖人        主题'
                 for items in nowForumPage:
@@ -164,7 +183,7 @@ class ForumSpider:
 
             if len(self.pages) < 2:
                 try:
-                    forumPage = self.getForumPage(forum, str(self.page))
+                    forumPage, self.title = self.getForumPage(forum, str(self.page))
                     self.page += 1
                     self.pages.append(forumPage)
                 except:
