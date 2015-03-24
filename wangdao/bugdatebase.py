@@ -7,6 +7,15 @@ import re
 import time
 import MySQLdb
 
+#--------------SQL---------------------
+
+db = MySQLdb.connect('localhost', 'root', 'liruicheng122*.', 'wangdao', charset = 'utf8')
+cursor = db.cursor()
+db.select_db('wangdao')
+
+#-------------SQL----------------------
+
+#----------------CLASS SPIDER----------------------------
 class ForumSpider:
 
     def __init__(self):
@@ -34,33 +43,22 @@ class ForumSpider:
 
         return items, title
 
-    def showForum(self, nowForumPage, forum):
-
-        db = MySQLdb.connect('localhost', 'root', 'liruicheng122*.', 'wangdao', charset = 'utf8')
-        cursor = db.cursor()
-        db.select_db('wangdao')
-
+    def saveForumPage(self, nowForumPage, forum):
 
         for items in nowForumPage:
 
             postId = re.split(r'thread-(.+?)-', items[0])
             #--------------------SQL--------------------------------------
-            sql_search = cursor.execute('SELECT * FROM `forum` WHERE `POST_ID` = ' + postId[1])
+            sql_search = cursor.execute('SELECT POST_ID FROM `forum` WHERE `POST_ID` = ' + postId[1])
             if sql_search:
-                print u'jump'
                 continue
 
            # itmes 构造
            # items[0] = URL items[1] = TITLE items[2] = UID items[3] = AUTHOR items[4] = time
             value = [forum, postId[1], items[3], items[2], items[4], items[0], items[1]]
-            print value
             cursor.execute("INSERT INTO forum (FORUM_ID, POST_ID, AUTHOR, UID, DATE, URL, TITLE) VALUES(%s ,%s ,%s, %s, %s, %s, %s)", value)
 
-      #  flag = 1
-
         db.commit()
-        cursor.close()
-        db.close()
 
         del self.pages[0]
 
@@ -98,7 +96,7 @@ class ForumSpider:
 
             if self.pages:
                 nowPage = self.pages[0]
-                self.showForum(nowPage,forum)
+                self.saveForumPage(nowPage,forum)
                 page += 1
 
 
@@ -123,7 +121,13 @@ for line in fconfig:
     if line:
         forum_id.append(int(line))
 
-#for id in forum_id:
-#    print id
-myModel = ForumSpider()
-myModel.startSpider(str(280))
+fconfig.close()
+
+for id in forum_id:
+    print id
+    myModel = ForumSpider()
+    myModel.startSpider(str(id))
+
+cursor.close()
+db.close()
+
